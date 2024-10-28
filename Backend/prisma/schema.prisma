@@ -1,0 +1,56 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TestingType {
+  Internal
+  External
+  Both
+}
+
+enum RiskLevel {
+  None
+  Info
+  Low
+  Medium
+  High
+  Critical
+}
+
+model Company {
+  id          String      @id @default(uuid())
+  name        String
+  assets      Asset[]
+  testingType TestingType
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Asset {
+  id              String    @id @default(uuid()) 
+  title           String
+  description     String
+  ip              String
+  cveId           String?
+  port            Int
+  riskLevel       RiskLevel
+  cvssScore       Float?
+  impact          String
+  recommendations String
+  reference       String[]
+  companyId       String    
+  company         Company   @relation(fields: [companyId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
