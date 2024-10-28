@@ -19,15 +19,6 @@ enum TestingType {
   Both
 }
 
-enum RiskLevel {
-  None
-  Info
-  Low
-  Medium
-  High
-  Critical
-}
-
 model Company {
   id          String      @id @default(uuid())
   name        String
@@ -44,7 +35,7 @@ model Asset {
   ip              String
   cveId           String?
   port            Int
-  riskLevel       RiskLevel
+  riskLevel       Int
   cvssScore       Float?
   impact          String
   recommendations String
