@@ -5,37 +5,32 @@ import { v4 as uuidv4 } from "uuid";
 const prisma = new PrismaClient();
 
 async function main() {
-  // Read the JSON file
   const jsonData = JSON.parse(fs.readFileSync("data.json", "utf-8"));
 
-  // Prepare to hold the company and asset data
-  const companyId = uuidv4(); // Generate a new UUID for the company
+  const companyId = uuidv4();
 
-  // Create the company in the database
   await prisma.company.create({
     data: {
       id: companyId,
-      name: "Default Company", // Use a default name for the company
-      testingType: "Internal", // Default testing type
+      name: "Default Company",
+      testingType: "Internal",
     },
   });
 
-  // Prepare asset data from JSON
   const assetData = {
     title: jsonData.title,
-    description: jsonData.description, // Keep as an array
+    description: jsonData.description,
     ip: jsonData.ip,
-    cveId: jsonData.cveId ? jsonData.cveId.split(",") : [], // Split if multiple CVE IDs
+    cveId: jsonData.cveId ? jsonData.cveId.split(",") : [],
     port: jsonData.port,
-    riskLevel: jsonData.riskLevel, // Assuming riskLevel is already an integer
+    riskLevel: jsonData.riskLevel,
     cvssScore: jsonData.cvssScore || null,
-    impact: jsonData.impact, // Keep as an array
-    recommendations: jsonData.recommendations, // Keep as an array
-    reference: jsonData.references.length > 0 ? jsonData.references : [], // Directly use the references array
+    impact: jsonData.impact,
+    recommendations: jsonData.recommendations,
+    reference: jsonData.references.length > 0 ? jsonData.references : [],
     companyId: companyId,
   };
 
-  // Create asset in the database
   await prisma.asset.create({
     data: assetData,
   });

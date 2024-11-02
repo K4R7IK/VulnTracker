@@ -19,6 +19,7 @@ function processCsvToJson() {
         recommendations: data.Solutions.split("\n"),
         references: data.Reference ? data.Reference.split(",") : [],
       };
+      processedData.description = processedData.description.fitler(line => line !== '');
       results.push(processedData);
     })
     .on("end", () => {

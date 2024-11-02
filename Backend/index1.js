@@ -7,10 +7,10 @@ const prisma = new PrismaClient();
 
 async function main() {
   const results = [];
-  const assetsToInsert = [];
+  const dataAssests = [];
   let companyData = null;
 
-  fs.createReadStream("data.csv")
+  fs.createReadStream("Shriram.csv")
     .pipe(csv({ separator: ";" }))
     .on("data", (data) => results.push(data))
     .on("end", async () => {
@@ -19,52 +19,59 @@ async function main() {
       // Prepare the company data
       companyData = {
         id: companyId,
-        name: "Test Company",
+        name: "Shriram Piston",
         testingType: "Internal",
       };
 
       // Process each item and prepare for asset insertion
       for (const item of results) {
-        const riskLevelMapping = {
-          None: "None",
-          Info: "Info",
-          Low: "Low",
-          Medium: "Medium",
-          High: "High",
-          Critical: "Critical",
-        };
-
-        const riskLevelValue =
-          riskLevelMapping[item["Risk Rating"]?.trim()] || "None"; // Default to "None" if invalid
-
         // Collect processed asset data
-        assetsToInsert.push({
+        dataAssests.push({
           title: item["Vulnerability Title"],
-          description: item.Description,
-          ip: item["Impacted IP/URL"],
+          description: item.Description.replace(/\n/g," "),
+          ip: item["IP"],
           cveId: item["CVE-ID"] || null,
           port: parseInt(item.Port, 10),
-          riskLevel: riskLevelValue, // Set riskLevel using mapped value
-          cvssScore: parseFloat(item["CVSS v2.0 Base Score"]) || null,
-          impact: item.Impact,
-          recommendations: item.Solutions,
-          reference: item.Reference ? item.Reference.split(",") : [],
+          riskLevel: mapRiskLevel(item["Risk-Level"]),
+          cvssScore: parseFloat(item["CVSS-Base-Score"]) || null,
+          impact: item.Impact.replace(/\n/g," "),
+          recommendations: item.Solutions.replace(/\n/g," "),
+          reference: item.Reference ? item.Reference.split("\n"): [],
           companyId: companyId,
         });
       }
-
-      // Bulk insert the company
+      //Bulk insert the company
       await prisma.company.create({
         data: companyData,
       });
-
-      // Bulk insert assets after all data processing is done
+      //
+      //Bulk insert assets after all data processing is done
       await prisma.asset.createMany({
-        data: assetsToInsert,
+        data: dataAssests,
       });
+
+      //console.log("Company data", companyData);
+      //console.log("Result Array", dataAssests);
 
       console.log("Data imported successfully!");
     });
+}
+
+function mapRiskLevel(riskRating) {
+  switch (riskRating) {
+    case "None":
+      return 0;
+    case "Low":
+      return 1;
+    case "Medium":
+      return 2;
+    case "High":
+      return 3;
+    case "Critical":
+      return 4;
+    default:
+      return null;
+  }
 }
 
 main()
