@@ -19,29 +19,48 @@ enum TestingType {
   Both
 }
 
-model Company {
-  id          String      @id @default(uuid())
-  name        String
-  assets      Asset[]
-  testingType TestingType
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+enum RiskLevel {
+  None
+  Low
+  Medium
+  High
+  Critical
 }
 
-model Asset {
-  id              String    @id @default(uuid()) 
-  title           String
-  description     String
-  ip              String
-  cveId           String?
+enum ProtocolType {
+  TCP
+  UDP
+  None
+}
+
+model Company {
+  id              String                    @id @default(uuid())
+  name            String                    @unique
+  vulnerabilities Vulnerability[]
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+}
+
+model Vulnerability {
+  id              String       @id @default(uuid())
+  assetIp         String
+  assetOS         String?
   port            Int
-  riskLevel       Int
+  protocol        ProtocolType
+  title           String
+  cveId           String
+  description     String
+  riskLevel       RiskLevel
   cvssScore       Float?
   impact          String
   recommendations String
-  reference       String[]
-  companyId       String    
-  company         Company   @relation(fields: [companyId], references: [id])
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  references      String
+  quarter         String[]
+  isResolved      Boolean      @default(false)
+  uniqueHash      String       @unique
+  companyId       String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id])
 }

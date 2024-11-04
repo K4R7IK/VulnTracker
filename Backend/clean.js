@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 async function deleteAll() {
   try {
     // Delete records from Asset model
-    await prisma.asset.deleteMany({});
+    await prisma.vulnerability.deleteMany({});
     console.log('All assets deleted.');
 
     // Delete records from Company model
