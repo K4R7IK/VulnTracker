@@ -48,13 +48,13 @@ model Vulnerability {
   port            Int
   protocol        ProtocolType
   title           String
-  cveId           String
+  cveId           String[]
   description     String
   riskLevel       RiskLevel
   cvssScore       Float?
   impact          String
   recommendations String
-  references      String
+  references      String[]
   quarter         String[]
   isResolved      Boolean      @default(false)
   uniqueHash      String       @unique

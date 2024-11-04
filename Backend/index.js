@@ -92,16 +92,14 @@ async function importCsv(filepath, quarterValue, companyName) {
             port: parseInt(row["Port"], 10),
             protocol: row["PROTOCOL"].toUpperCase() || "None",
             title: row["Vulnerability Title"],
-            cveId: row["CVE-ID"] || "",
+            cveId: row["CVE-ID"] ? row["CVE-ID"].split("\n") : [],
             description: row["Description"].replace(/\n/g, " "),
             riskLevel: row["Risk-Level"] || "None",
             cvssScore: parseFloat(row["CVSS-Base-Score"]) || 0,
             impact: row["Impact"],
             recommendations: row["Solutions"],
-            references: row["Reference"]
-              ? row["Reference"].split("\n").join(";")
-              : "",
-            quarter: [quarterValue], // Initialize with current quarter as an array
+            references: row["Reference"] ? row["Reference"].split(" ") : [],
+            quarter: [quarterValue],
             uniqueHash: uniqueHash,
             companyId: companyId,
             isResolved: false,
@@ -133,8 +131,8 @@ async function importCsv(filepath, quarterValue, companyName) {
     });
 }
 
-importCsv("Shriram.csv", "Q3", "Shriram Piston")
-//importCsv("Shriram2.csv", "Q2", "Shriram Piston")
+importCsv("Shriram.csv", "Q1", "Shriram Piston")
+  //importCsv("Shriram2.csv", "Q2", "Shriram Piston")
   .catch((e) => console.error(e))
   .finally(async () => {
     await prisma.$disconnect();
