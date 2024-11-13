@@ -63,4 +63,5 @@ model Vulnerability {
   updatedAt       DateTime     @updatedAt
 
   company Company @relation(fields: [companyId], references: [id])
+  @@unique([companyId, uniqueHash])
 }

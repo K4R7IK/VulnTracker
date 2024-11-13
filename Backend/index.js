@@ -1,139 +1,116 @@
-import fs from "fs";
-import csv from "csv-parser";
+import express from "express";
+import multer from "multer";
+import cors from "cors";
 import { PrismaClient } from "@prisma/client";
-import { v4 as uuidv4 } from "uuid";
-import crypto from "crypto";
+import { importCsv } from "./importCsv.js";
+
+const app = express();
+const upload = multer({ dest: "uploads/" });
 
 const prisma = new PrismaClient();
+// specify this later to a single frontend.
+app.use(cors());
+app.use(express.json());
 
-function generateHash(...fields) {
-  return crypto.createHash("md5").update(fields.join("|")).digest("hex");
-}
+app.post("/upload", upload.single("file"), async (req, res) => {
+  const { quarter, companyName } = req.body;
+  const filepath = req.file.path;
 
-async function importCsv(filepath, quarterValue, companyName) {
-  const results = [];
-  const vulnAsset = [];
-  const csvVulnSet = new Set();
+  try {
+    await importCsv(filepath, quarter, companyName);
+    res.status(200).json({ message: "File processed successfully." });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error processing file." });
+  }
+});
 
-  fs.createReadStream(filepath)
-    .pipe(csv({ separator: ";" }))
-    .on("data", (data) => results.push(data))
-    .on("end", async () => {
-      let companyId;
-
-      // Fetch or create company
-      const existingCompany = await prisma.company.findUnique({
-        where: { name: companyName },
-      });
-
-      if (existingCompany) {
-        companyId = existingCompany.id;
-      } else {
-        const newCompany = await prisma.company.create({
-          data: {
-            id: uuidv4(),
-            name: companyName,
-          },
-        });
-        companyId = newCompany.id;
-      }
-
-      // Fetch existing vulnerabilities associated with the company
-      const existingVulnerabilities = await prisma.vulnerability.findMany({
-        where: {
-          companyId: companyId,
-        },
-      });
-
-      // Create a map for quick lookup of existing vulnerabilities
-      const existingVulnMap = new Map();
-      existingVulnerabilities.forEach((vuln) => {
-        existingVulnMap.set(
-          `${vuln.title}-${vuln.assetIp}-${vuln.port}`, // Unique key
-          vuln,
-        );
-      });
-
-      for (const row of results) {
-        const vulnKey = `${row["Vulnerability Title"]}-${row["IP"]}-${parseInt(row["Port"], 10)}`;
-        csvVulnSet.add(vulnKey);
-        const existingVuln = existingVulnMap.get(vulnKey);
-
-        if (existingVuln) {
-          // Update `quarter` if vulnerability exists
-          const updatedQuarters = Array.from(
-            new Set([...existingVuln.quarter, quarterValue]),
-          );
-
-          await prisma.vulnerability.update({
-            where: { id: existingVuln.id },
-            data: {
-              isResolved: false,
-              quarter: updatedQuarters,
-              updatedAt: new Date(),
-            },
-          });
-        } else {
-          // Create a new vulnerability object if it doesn't exist
-          const uniqueHash = generateHash(
-            row["Vulnerability Title"],
-            row["CVE-ID"],
-            row["IP"],
-            row["Port"],
-            row["Description"],
-            row["CVSS-Base-Score"],
-            row["Impact"],
-            row["Solutions"],
-          );
-          vulnAsset.push({
-            id: uuidv4(),
-            assetIp: row["IP"],
-            assetOS: row["Asset OS"] || null,
-            port: parseInt(row["Port"], 10),
-            protocol: row["PROTOCOL"].toUpperCase() || "None",
-            title: row["Vulnerability Title"],
-            cveId: row["CVE-ID"] ? row["CVE-ID"].split("\n") : [],
-            description: row["Description"].replace(/\n/g, " "),
-            riskLevel: row["Risk-Level"] || "None",
-            cvssScore: parseFloat(row["CVSS-Base-Score"]) || 0,
-            impact: row["Impact"],
-            recommendations: row["Solutions"],
-            references: row["Reference"] ? row["Reference"].split(" ") : [],
-            quarter: [quarterValue],
-            uniqueHash: uniqueHash,
-            companyId: companyId,
-            isResolved: false,
-          });
-        }
-      }
-
-      const dbVulnKey = Array.from(existingVulnMap.keys());
-      const missingInCsvKey = dbVulnKey.filter((key) => !csvVulnSet.has(key));
-
-      if (missingInCsvKey.length > 0) {
-        const missingIds = missingInCsvKey.map(
-          (key) => existingVulnMap.get(key).id,
-        );
-        await prisma.vulnerability.updateMany({
-          where: { id: { in: missingIds } },
-          data: { isResolved: true },
-        });
-      }
-
-      // Insert new vulnerabilities in batch
-      if (vulnAsset.length > 0) {
-        await prisma.vulnerability.createMany({
-          data: vulnAsset,
-        });
-      }
-
-      console.log("Vulnerabilities imported/updated successfully.");
+app.get("/companies", async (req, res) => {
+  try {
+    const companies = await prisma.company.findMany({
+      select: { id: true, name: true },
     });
-}
+    res.status(200).json(companies);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error fetching companies." });
+  }
+});
 
-importCsv("Shriram.csv", "Q1", "Shriram Piston")
-  //importCsv("Shriram2.csv", "Q2", "Shriram Piston")
-  .catch((e) => console.error(e))
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+app.get("/vulnerabilities", async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      search = "",
+      companyId,
+      quarter,
+      isResolved,
+      quarterNot,
+    } = req.query;
+    const skip = (page - 1) * limit;
+
+    const where = {
+      ...(search && {
+        OR: [
+          { title: { contains: search, mode: "insensitive" } },
+          { assetIp: { contains: search, mode: "insensitive" } },
+        ],
+      }),
+      ...(companyId && { companyId }),
+      ...(quarter && { quarter: { has: quarter } }),
+      ...(quarterNot && { NOT: { quarter: { has: quarterNot } } }),
+      ...(isResolved !== undefined && { isResolved: isResolved === "true" }),
+    };
+
+    // Fetch vulnerabilities and total count
+    const [vulnerabilities, total] = await Promise.all([
+      prisma.vulnerability.findMany({
+        where,
+        include: { company: true },
+        skip: parseInt(skip),
+        take: parseInt(limit),
+      }),
+      prisma.vulnerability.count({ where }),
+    ]);
+
+    res.status(200).json({
+      data: vulnerabilities,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / limit),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error fetching vulnerabilities." });
+  }
+});
+
+app.get("/quarters", async (req, res) => {
+  try {
+    const { companyId } = req.query;
+
+    const quartersData = await prisma.vulnerability.findMany({
+      where: companyId ? { companyId } : {},
+      select: {
+        quarter: true,
+      },
+    });
+
+    const quarterSet = new Set();
+    quartersData.forEach((vuln) => {
+      vuln.quarter.forEach((q) => quarterSet.add(q));
+    });
+
+    const uniqueQuarters = Array.from(quarterSet);
+    uniqueQuarters.sort(); // Optional sorting
+
+    res.status(200).json(uniqueQuarters);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error fetching quarters." });
+  }
+});
+app.listen(5000, () => {
+  console.log("Server running on http://localhost:5000");
+});
